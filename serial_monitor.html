@@ -1,0 +1,1039 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Serial Monitor &amp; Recorder</title>
+<style>
+  :root {
+    --bg: #14181f;
+    --panel: #1c222c;
+    --panel-border: #2c3444;
+    --text: #e6e9ef;
+    --muted: #8b93a3;
+    --accent: #4fd1c5;
+    --accent-dim: #2f7f78;
+    --danger: #ef5a6f;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  body { padding: 20px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 14px 0 6px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .tab-btn {
+    background: transparent; border: 1px solid var(--panel-border); color: var(--muted);
+    border-radius: 6px; padding: 8px 16px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  .tab-btn.active { color: #06201d; background: var(--accent); border-color: var(--accent); }
+  .layout { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 10px; padding: 16px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+  button {
+    background: var(--accent-dim); color: #eafffb; border: 1px solid var(--accent);
+    border-radius: 6px; padding: 8px 14px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  button:hover:not(:disabled) { background: var(--accent); color: #06201d; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.secondary { background: transparent; border-color: var(--panel-border); color: var(--text); }
+  button.secondary:hover:not(:disabled) { border-color: var(--muted); background: #232b38; }
+  button.danger { border-color: var(--danger); color: var(--danger); }
+  button.danger:hover:not(:disabled) { background: var(--danger); color: #200608; }
+  label { font-size: 12px; color: var(--muted); }
+  input[type="number"], input[type="text"], select {
+    background: #10141b; border: 1px solid var(--panel-border); color: var(--text);
+    border-radius: 6px; padding: 6px 8px; font-size: 13px;
+  }
+  input[type="text"] { width: 220px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .status { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--panel-border); color: var(--muted); }
+  .status.connected { color: var(--accent); border-color: var(--accent-dim); }
+  .status.error { color: var(--danger); border-color: var(--danger); }
+  canvas { display: block; width: 100%; }
+  .checklist { display: flex; flex-wrap: wrap; gap: 8px; }
+  .field-chip {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+    background: #10141b; border: 1px solid var(--panel-border); border-radius: 999px; padding: 4px 10px;
+    cursor: pointer;
+  }
+  .field-chip input { margin: 0; }
+  .swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .readouts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+  .readout {
+    background: #10141b; border: 1px solid var(--panel-border); border-radius: 8px;
+    padding: 8px 12px; text-align: center; min-width: 90px;
+  }
+  .readout .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .readout .value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .side h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .stat-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--panel-border); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row span:last-child { font-variant-numeric: tabular-nums; color: var(--accent); }
+  .log {
+    margin-top: 12px; height: 140px; overflow-y: auto; background: #10141b;
+    border: 1px solid var(--panel-border); border-radius: 8px; padding: 8px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+    color: var(--muted); white-space: pre-wrap;
+  }
+  .footer-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .log-divider { color: var(--accent); font-style: italic; text-align: center; }
+  .warning { margin-top: 14px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .lib-row {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    background: #10141b; border: 1px solid var(--panel-border); border-radius: 8px;
+    padding: 10px 14px; margin-bottom: 8px;
+  }
+  .lib-name { font-weight: 600; font-size: 13px; }
+  .lib-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .lib-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .lib-actions button { padding: 6px 10px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>Serial Monitor &amp; Recorder</h1>
+<p class="subtitle">Generic Web Serial bench dashboard — auto-detects numeric fields from any project's serial output, records full sessions that survive closing the tab, and lets you reopen/export them later. Chrome or Edge, desktop only.</p>
+
+<div class="tabs">
+  <button id="liveTabBtn" class="tab-btn active">Live</button>
+  <button id="libraryTabBtn" class="tab-btn">Library</button>
+</div>
+
+<!-- ===================== LIVE TAB ===================== -->
+<div id="liveTabPanel">
+  <div class="layout">
+    <div class="panel">
+      <div class="controls">
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
+        <button id="startBtn" disabled>Start Recording</button>
+        <button id="stopBtn" class="secondary" disabled>Stop Recording</button>
+        <div class="field">
+          <label for="baud">Baud rate</label>
+          <select id="baud">
+            <option value="9600" selected>9600</option>
+            <option value="115200">115200</option>
+            <option value="custom">Custom…</option>
+          </select>
+        </div>
+        <input type="number" id="customBaud" placeholder="baud" style="width:80px;display:none">
+        <span id="status" class="status">not connected</span>
+      </div>
+      <div class="controls">
+        <div class="field">
+          <label for="sessionName">Session name</label>
+          <input type="text" id="sessionName" placeholder="Session name">
+        </div>
+        <div class="field">
+          <label for="projectLabel">Project / device</label>
+          <input type="text" id="projectLabel" placeholder="e.g. esphome-alarm-sensor">
+        </div>
+      </div>
+      <div class="controls">
+        <div id="liveChecklist" class="checklist"></div>
+        <label style="display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="liveNormalize"> Normalize (0–1 per series)
+        </label>
+      </div>
+
+      <h3>Live (last ~60s)</h3>
+      <canvas id="liveChart" height="220"></canvas>
+      <h3>Full session</h3>
+      <canvas id="fullChart" height="160"></canvas>
+
+      <div id="liveReadouts" class="readouts"></div>
+      <div id="liveLog" class="log"></div>
+
+      <div class="footer-actions">
+        <button class="secondary" id="exportCsvBtn">Export CSV</button>
+        <button class="secondary" id="exportJsonBtn">Export JSON</button>
+      </div>
+    </div>
+
+    <div class="panel side">
+      <h2>Session stats</h2>
+      <div class="stat-row"><span>Samples recorded</span><span id="statSamples">0</span></div>
+      <div class="stat-row"><span>Fields discovered</span><span id="statFields">0</span></div>
+      <div class="stat-row"><span>Started</span><span id="statStarted">–</span></div>
+      <p class="warning">
+        Fields are auto-detected from <code>label: value</code>, <code>label -&gt; value</code>,
+        <code>label=value</code> pairs and single-line JSON objects — no per-project config needed.
+        Known gaps: a trailing third value in <code>key:value:meta</code> triplets (e.g. server_v2a's
+        age-ms suffix) is dropped, and readings split across multiple print lines are recorded as
+        separate samples rather than merged into one row.
+      </p>
+      <p class="warning">
+        Recordings autosave to this browser's storage every few seconds, so closing the tab doesn't
+        lose them — reopen them from the Library tab. Only one program can hold the serial port at a
+        time — close Arduino IDE's Serial Monitor/Plotter before connecting here.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== LIBRARY TAB ===================== -->
+<div id="libraryTabPanel" hidden>
+  <div id="libraryListView">
+    <div class="controls">
+      <button class="secondary" id="importBtn">Import session JSON…</button>
+      <input type="file" id="importInput" accept="application/json" style="display:none">
+      <span id="libStatus" class="status"></span>
+    </div>
+    <div id="libraryList"></div>
+  </div>
+
+  <div id="libraryViewerView" hidden>
+    <div class="controls">
+      <button class="secondary" id="libBackBtn">&larr; Back to Library</button>
+      <span id="libViewerTitle" style="font-weight:600;font-size:14px;"></span>
+    </div>
+    <p id="libViewerMeta" class="subtitle"></p>
+    <div class="controls">
+      <div id="libChecklist" class="checklist"></div>
+      <label style="display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" id="libNormalize"> Normalize (0–1 per series)
+      </label>
+    </div>
+    <canvas id="libChart" height="220"></canvas>
+    <div class="footer-actions">
+      <button class="secondary" id="libRenameBtn">Rename</button>
+      <button class="secondary danger" id="libDeleteBtn">Delete</button>
+      <button class="secondary" id="libExportCsvBtn">Export CSV</button>
+      <button class="secondary" id="libExportJsonBtn">Export JSON</button>
+    </div>
+    <div id="libLog" class="log"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- shared helpers ----------
+
+  const PALETTE = ['#4fd1c5','#f5a623','#ef5a6f','#7c9eff','#c792ea','#82e0aa','#ffb86c','#6fd6ff','#e06c75','#a3be8c'];
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function slug(s) {
+    return (String(s || 'session').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')) || 'session';
+  }
+
+  function csvEscape(v) {
+    const s = String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function downloadBlob(content, type, filename) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function minMax(items, accessor) {
+    let min = Infinity, max = -Infinity;
+    for (const it of items) {
+      const v = accessor(it);
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    return { min, max };
+  }
+
+  function logLine(container, text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    container.appendChild(div);
+    while (container.children.length > 400) container.removeChild(container.firstChild);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  let lastLogTime = Date.now();
+
+  // Timestamped data line — prefixed with the time elapsed since the previous
+  // data line, so interval length is visible at a glance without exporting.
+  function logDataLine(container, text) {
+    const now = Date.now();
+    const delta = ((now - lastLogTime) / 1000).toFixed(3);
+    lastLogTime = now;
+    logLine(container, '+' + delta + 's  ' + text);
+  }
+
+  // Untimestamped marker (recording start/stop) — doesn't affect the delta
+  // shown on surrounding data lines.
+  function logDivider(container, text) {
+    const div = document.createElement('div');
+    div.className = 'log-divider';
+    div.textContent = text;
+    container.appendChild(div);
+    while (container.children.length > 400) container.removeChild(container.firstChild);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function assignColor(registry, key, displayName) {
+    if (!registry.has(key)) {
+      const idx = registry.size;
+      registry.set(key, { color: PALETTE[idx % PALETTE.length], displayName: displayName || key });
+    } else if (displayName) {
+      registry.get(key).displayName = displayName;
+    }
+    return registry.get(key);
+  }
+
+  function renderChecklist(container, registry, fieldOrder, checkedSet, onChange) {
+    container.innerHTML = '';
+    for (const key of fieldOrder) {
+      const meta = registry.get(key);
+      if (!meta) continue;
+      const label = document.createElement('label');
+      label.className = 'field-chip';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = checkedSet.has(key);
+      cb.addEventListener('change', () => {
+        if (cb.checked) checkedSet.add(key); else checkedSet.delete(key);
+        onChange();
+      });
+      const swatch = document.createElement('span');
+      swatch.className = 'swatch';
+      swatch.style.background = meta.color;
+      label.appendChild(cb);
+      label.appendChild(swatch);
+      label.appendChild(document.createTextNode(meta.displayName));
+      container.appendChild(label);
+    }
+  }
+
+  // ---------- line parser: auto-detect key:value-ish fields ----------
+
+  const KV_RE = /([A-Za-z_][A-Za-z0-9_-]*)\s*(?:->|:|=)\s*(-?\d+(?:\.\d+)?)/g;
+
+  function normalizeKey(k) { return k.trim().toLowerCase(); }
+
+  function parseLine(line) {
+    const trimmed = line.trim();
+    if (!trimmed) return null;
+
+    const fields = {}; // normKey -> {value, display}
+
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        const obj = JSON.parse(trimmed);
+        if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+          for (const [k, v] of Object.entries(obj)) {
+            let num = null;
+            if (typeof v === 'number' && isFinite(v)) num = v;
+            else if (typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v))) num = Number(v);
+            if (num !== null) fields[normalizeKey(k)] = { value: num, display: k };
+          }
+          return { raw: line, fields };
+        }
+      } catch (e) { /* not valid JSON — fall through to generic scan */ }
+    }
+
+    for (const segment of trimmed.split('|')) {
+      KV_RE.lastIndex = 0;
+      let m;
+      while ((m = KV_RE.exec(segment)) !== null) {
+        const label = m[1];
+        const value = Number(m[2]);
+        const norm = normalizeKey(label);
+        if (fields[norm] === undefined) {
+          fields[norm] = { value, display: label };
+        } else {
+          let n = 2;
+          while (fields[norm + '_' + n] !== undefined) n++;
+          fields[norm + '_' + n] = { value, display: label + '_' + n };
+        }
+      }
+    }
+
+    return { raw: line, fields };
+  }
+
+  // ---------- session model ----------
+
+  function newSession(baudRate) {
+    const now = Date.now();
+    return {
+      id: crypto.randomUUID(),
+      name: 'Session ' + new Date(now).toLocaleString(),
+      projectLabel: localStorage.getItem('serial_monitor_last_project_label') || '',
+      baudRate: baudRate || 9600,
+      createdAt: now,
+      updatedAt: now,
+      closedAt: null,
+      fieldOrder: [],
+      fieldDisplayNames: {},
+      samples: []
+    };
+  }
+
+  function addSample(session, rawLine) {
+    const parsed = parseLine(rawLine);
+    if (parsed === null) return { newKeys: [] };
+    const fieldsOut = {};
+    const newKeys = [];
+    for (const [norm, info] of Object.entries(parsed.fields)) {
+      fieldsOut[norm] = info.value;
+      if (session.fieldDisplayNames[norm] === undefined) {
+        session.fieldDisplayNames[norm] = info.display;
+        session.fieldOrder.push(norm);
+        newKeys.push(norm);
+      }
+    }
+    session.samples.push({ t: Date.now(), raw: parsed.raw, fields: fieldsOut });
+    return { newKeys };
+  }
+
+  // ---------- IndexedDB persistence ----------
+
+  const DB_NAME = 'serial_monitor_db';
+  const DB_VERSION = 1;
+  const STORE = 'sessions';
+  let dbPromise = null;
+
+  function openDb() {
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return dbPromise;
+  }
+
+  async function putSession(session) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(session);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function getSession(id) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readonly');
+      const req = tx.objectStore(STORE).get(id);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function getAllSessionsMeta() {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readonly');
+      const req = tx.objectStore(STORE).getAll();
+      req.onsuccess = () => {
+        const sessions = req.result || [];
+        sessions.sort((a, b) => b.createdAt - a.createdAt);
+        resolve(sessions.map(s => ({
+          id: s.id, name: s.name, projectLabel: s.projectLabel, baudRate: s.baudRate,
+          createdAt: s.createdAt, closedAt: s.closedAt, sampleCount: s.samples.length
+        })));
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function deleteSession(id) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  // ---------- charting (shared by live / full-session / library viewer) ----------
+
+  const chartInstances = [];
+
+  function registerChart(canvas, cssHeight, drawFn) {
+    const inst = { canvas, ctx: canvas.getContext('2d'), cssHeight, draw: drawFn };
+    chartInstances.push(inst);
+    return inst;
+  }
+
+  function resizeChart(inst) {
+    const rect = inst.canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.round(rect.width));
+    inst.canvas.width = Math.max(1, Math.round(w * dpr));
+    inst.canvas.height = Math.max(1, Math.round(inst.cssHeight * dpr));
+    inst.canvas.style.height = inst.cssHeight + 'px';
+    inst.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function redrawChart(inst) {
+    resizeChart(inst);
+    inst.draw(inst.ctx, inst.canvas.clientWidth, inst.cssHeight);
+  }
+
+  window.addEventListener('resize', () => chartInstances.forEach(redrawChart));
+
+  function drawChart(ctx, w, h, samples, registry, checkedKeys, opts) {
+    ctx.clearRect(0, 0, w, h);
+    const pad = { l: 46, r: 10, t: 10, b: 10 };
+    const plotW = w - pad.l - pad.r;
+    const plotH = h - pad.t - pad.b;
+    if (plotW <= 0 || plotH <= 0 || !samples.length || !checkedKeys.size) return;
+
+    let windowSamples, xForSample;
+    if (opts.mode === 'live') {
+      windowSamples = samples.slice(-opts.liveWindow);
+      xForSample = (s, i, n) => i / Math.max(1, n - 1);
+    } else {
+      const stride = Math.max(1, Math.ceil(samples.length / Math.max(1, plotW)));
+      windowSamples = [];
+      for (let i = 0; i < samples.length; i += stride) windowSamples.push(samples[i]);
+      const last = samples[samples.length - 1];
+      if (windowSamples[windowSamples.length - 1] !== last) windowSamples.push(last);
+      const t0 = samples[0].t, t1 = last.t;
+      xForSample = (s) => (t1 === t0) ? 0 : (s.t - t0) / (t1 - t0);
+    }
+
+    const seriesData = [];
+    for (const key of checkedKeys) {
+      const pts = [];
+      windowSamples.forEach((s, i) => {
+        const v = s.fields[key];
+        if (v !== undefined) pts.push({ x: xForSample(s, i, windowSamples.length), v });
+      });
+      if (pts.length) seriesData.push({ key, pts });
+    }
+    if (!seriesData.length) return;
+
+    let sharedRange = null;
+    if (!opts.normalize) {
+      sharedRange = minMax(seriesData.flatMap(s => s.pts), p => p.v);
+      if (!isFinite(sharedRange.min) || !isFinite(sharedRange.max)) sharedRange = { min: 0, max: 1 };
+      if (sharedRange.min === sharedRange.max) { sharedRange.min -= 1; sharedRange.max += 1; }
+      const padAmt = (sharedRange.max - sharedRange.min) * 0.1;
+      sharedRange.min -= padAmt; sharedRange.max += padAmt;
+    }
+
+    // grid (drawn against the shared range, or 0..1 in normalize mode)
+    ctx.strokeStyle = '#2a3140';
+    ctx.fillStyle = '#8b93a3';
+    ctx.font = '10px monospace';
+    ctx.lineWidth = 1;
+    const gMin = opts.normalize ? 0 : sharedRange.min;
+    const gMax = opts.normalize ? 1 : sharedRange.max;
+    for (let i = 0; i <= 4; i++) {
+      const y = pad.t + plotH - (plotH * i / 4);
+      ctx.beginPath();
+      ctx.moveTo(pad.l, y);
+      ctx.lineTo(pad.l + plotW, y);
+      ctx.stroke();
+      const val = gMin + (gMax - gMin) * i / 4;
+      ctx.fillText(val.toFixed(opts.normalize ? 2 : 1), 4, y + 3);
+    }
+
+    for (const { key, pts } of seriesData) {
+      const meta = registry.get(key);
+      if (!meta) continue;
+      let lo = sharedRange ? sharedRange.min : 0;
+      let hi = sharedRange ? sharedRange.max : 1;
+      if (opts.normalize) {
+        const r = minMax(pts, p => p.v);
+        lo = r.min; hi = r.max;
+        if (lo === hi) { lo -= 1; hi += 1; }
+      }
+      ctx.strokeStyle = meta.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      pts.forEach((p, i) => {
+        const x = pad.l + plotW * p.x;
+        const y = pad.t + plotH - plotH * (p.v - lo) / (hi - lo);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+  }
+
+  // ---------- tabs ----------
+
+  const liveTabBtn = document.getElementById('liveTabBtn');
+  const libraryTabBtn = document.getElementById('libraryTabBtn');
+  const liveTabPanel = document.getElementById('liveTabPanel');
+  const libraryTabPanel = document.getElementById('libraryTabPanel');
+
+  function switchTab(tab) {
+    liveTabBtn.classList.toggle('active', tab === 'live');
+    libraryTabBtn.classList.toggle('active', tab === 'library');
+    liveTabPanel.hidden = tab !== 'live';
+    libraryTabPanel.hidden = tab !== 'library';
+    if (tab === 'live') {
+      redrawChart(liveChartInst); redrawChart(fullChartInst);
+    } else {
+      refreshLibraryList();
+      if (openedLibSession) redrawChart(libChartInst);
+    }
+  }
+  liveTabBtn.addEventListener('click', () => switchTab('live'));
+  libraryTabBtn.addEventListener('click', () => switchTab('library'));
+
+  // ---------- LIVE TAB wiring ----------
+
+  const connectBtn = document.getElementById('connectBtn');
+  const disconnectBtn = document.getElementById('disconnectBtn');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const baudSelect = document.getElementById('baud');
+  const customBaudInput = document.getElementById('customBaud');
+  const statusEl = document.getElementById('status');
+  const sessionNameInput = document.getElementById('sessionName');
+  const projectLabelInput = document.getElementById('projectLabel');
+  const liveChecklistEl = document.getElementById('liveChecklist');
+  const liveNormalizeEl = document.getElementById('liveNormalize');
+  const liveReadoutsEl = document.getElementById('liveReadouts');
+  const liveLogEl = document.getElementById('liveLog');
+  const statSamples = document.getElementById('statSamples');
+  const statFields = document.getElementById('statFields');
+  const statStarted = document.getElementById('statStarted');
+
+  let port = null, reader = null, keepReading = false;
+  let liveSession = null;
+  let liveRegistry = new Map();
+  let liveChecked = new Set();
+  let lastFlushCount = 0;
+  let pendingBaud = 9600;
+
+  baudSelect.addEventListener('change', () => {
+    customBaudInput.style.display = baudSelect.value === 'custom' ? 'inline-block' : 'none';
+  });
+
+  function setStatus(text, kind) {
+    statusEl.textContent = text;
+    statusEl.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  function renderReadouts(container, session, registry, checkedSet) {
+    container.innerHTML = '';
+    if (!session) return;
+    const last = session.samples[session.samples.length - 1];
+    for (const key of session.fieldOrder) {
+      if (!checkedSet.has(key)) continue;
+      const meta = registry.get(key);
+      const val = last && last.fields[key] !== undefined ? last.fields[key] : '–';
+      const box = document.createElement('div');
+      box.className = 'readout';
+      box.innerHTML = '<div class="label" style="color:' + meta.color + '">' + escapeHtml(meta.displayName) +
+        '</div><div class="value">' + escapeHtml(String(val)) + '</div>';
+      container.appendChild(box);
+    }
+  }
+
+  function onLiveChecklistChange() {
+    renderReadouts(liveReadoutsEl, liveSession, liveRegistry, liveChecked);
+    redrawChart(liveChartInst); redrawChart(fullChartInst);
+  }
+  liveNormalizeEl.addEventListener('change', () => { redrawChart(liveChartInst); redrawChart(fullChartInst); });
+
+  const liveChartInst = registerChart(document.getElementById('liveChart'), 220, (ctx, w, h) =>
+    drawChart(ctx, w, h, liveSession ? liveSession.samples : [], liveRegistry, liveChecked,
+      { mode: 'live', liveWindow: 300, normalize: liveNormalizeEl.checked }));
+
+  const fullChartInst = registerChart(document.getElementById('fullChart'), 160, (ctx, w, h) =>
+    drawChart(ctx, w, h, liveSession ? liveSession.samples : [], liveRegistry, liveChecked,
+      { mode: 'full', normalize: liveNormalizeEl.checked }));
+
+  // Resets the field checklist/readouts/stats for a newly-started recording.
+  // Deliberately does NOT touch the raw log (recording continues logging
+  // into the same scrollback as the idle preview) or the name/project
+  // inputs (already seeded from them by the caller).
+  function resetLiveUi(session) {
+    liveRegistry = new Map();
+    liveChecked = new Set();
+    lastFlushCount = 0;
+    renderChecklist(liveChecklistEl, liveRegistry, [], liveChecked, onLiveChecklistChange);
+    renderReadouts(liveReadoutsEl, session, liveRegistry, liveChecked);
+    statSamples.textContent = '0';
+    statFields.textContent = '0';
+    statStarted.textContent = new Date(session.createdAt).toLocaleTimeString();
+    redrawChart(liveChartInst); redrawChart(fullChartInst);
+  }
+
+  // Connected but not (yet) recording: blank the checklist/readouts/stats
+  // and, optionally, the raw log — used on a fresh Connect.
+  function enterIdleState(clearLog) {
+    liveSession = null;
+    liveRegistry = new Map();
+    liveChecked = new Set();
+    lastFlushCount = 0;
+    renderChecklist(liveChecklistEl, liveRegistry, [], liveChecked, onLiveChecklistChange);
+    renderReadouts(liveReadoutsEl, null, liveRegistry, liveChecked);
+    statSamples.textContent = '0';
+    statFields.textContent = '0';
+    statStarted.textContent = '–';
+    redrawChart(liveChartInst); redrawChart(fullChartInst);
+    const preview = newSession(pendingBaud);
+    sessionNameInput.value = preview.name;
+    projectLabelInput.value = preview.projectLabel;
+    if (clearLog) liveLogEl.innerHTML = '';
+    lastLogTime = Date.now();
+  }
+
+  sessionNameInput.addEventListener('input', () => { if (liveSession) liveSession.name = sessionNameInput.value; });
+  projectLabelInput.addEventListener('input', () => {
+    if (liveSession) liveSession.projectLabel = projectLabelInput.value;
+    localStorage.setItem('serial_monitor_last_project_label', projectLabelInput.value);
+  });
+
+  function flushIfDirty() {
+    if (!liveSession || liveSession.closedAt) return;
+    if (liveSession.samples.length - lastFlushCount <= 0) return;
+    lastFlushCount = liveSession.samples.length;
+    liveSession.updatedAt = Date.now();
+    putSession(liveSession).catch(err => console.error('autosave failed', err));
+  }
+  setInterval(flushIfDirty, 5000);
+
+  class LineBreakTransformer {
+    constructor() { this.chunk = ''; }
+    transform(chunk, controller) {
+      this.chunk += chunk;
+      const lines = this.chunk.split('\n');
+      this.chunk = lines.pop();
+      for (const line of lines) controller.enqueue(line.replace(/\r$/, ''));
+    }
+    flush(controller) { if (this.chunk) controller.enqueue(this.chunk); }
+  }
+
+  function handleIncomingLine(line) {
+    if (!line.trim()) return;
+    logDataLine(liveLogEl, line);
+    if (!liveSession) return; // connected but not recording yet — log-only preview
+    const { newKeys } = addSample(liveSession, line);
+    if (newKeys.length) {
+      for (const key of newKeys) {
+        assignColor(liveRegistry, key, liveSession.fieldDisplayNames[key]);
+        liveChecked.add(key);
+      }
+      renderChecklist(liveChecklistEl, liveRegistry, liveSession.fieldOrder, liveChecked, onLiveChecklistChange);
+      statFields.textContent = liveSession.fieldOrder.length;
+    }
+    renderReadouts(liveReadoutsEl, liveSession, liveRegistry, liveChecked);
+    redrawChart(liveChartInst); redrawChart(fullChartInst);
+    statSamples.textContent = liveSession.samples.length;
+    if (liveSession.samples.length - lastFlushCount >= 50) flushIfDirty();
+  }
+
+  async function readLoop() {
+    const textDecoder = new TextDecoderStream();
+    const readableClosed = port.readable.pipeTo(textDecoder.writable).catch(() => {});
+    const lineStream = textDecoder.readable.pipeThrough(new TransformStream(new LineBreakTransformer()));
+    reader = lineStream.getReader();
+    try {
+      while (keepReading) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value !== undefined) handleIncomingLine(value);
+      }
+    } catch (err) {
+      if (keepReading) setStatus('Read error: ' + err.message, 'error');
+    } finally {
+      reader.releaseLock();
+      await readableClosed;
+    }
+  }
+
+  async function connect() {
+    if (!('serial' in navigator)) {
+      setStatus('Web Serial not supported — use Chrome or Edge', 'error');
+      return;
+    }
+    try {
+      const baud = baudSelect.value === 'custom' ? (Number(customBaudInput.value) || 9600) : Number(baudSelect.value);
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: baud });
+      pendingBaud = baud;
+      enterIdleState(true);
+      keepReading = true;
+      setStatus('connected', 'connected');
+      connectBtn.disabled = true;
+      disconnectBtn.disabled = false;
+      baudSelect.disabled = true;
+      customBaudInput.disabled = true;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      readLoop();
+    } catch (err) {
+      setStatus('Connection failed: ' + err.message, 'error');
+    }
+  }
+
+  // Finalizes the current recording (if any and not already closed) without
+  // touching the port — shared by Stop and Disconnect.
+  async function finalizeRecording(withDivider) {
+    if (!liveSession || liveSession.closedAt) return;
+    liveSession.closedAt = Date.now();
+    await putSession(liveSession).catch(() => {});
+    lastFlushCount = liveSession.samples.length;
+    if (withDivider) logDivider(liveLogEl, '── Recording stopped ──');
+  }
+
+  async function disconnect() {
+    keepReading = false;
+    try { if (reader) await reader.cancel(); } catch (_) {}
+    try { if (port) await port.close(); } catch (_) {}
+    port = null;
+    await finalizeRecording(false);
+    setStatus('not connected');
+    connectBtn.disabled = false;
+    disconnectBtn.disabled = true;
+    baudSelect.disabled = false;
+    customBaudInput.disabled = false;
+    startBtn.disabled = true;
+    stopBtn.disabled = true;
+  }
+
+  if ('serial' in navigator) {
+    navigator.serial.addEventListener('disconnect', () => {
+      if (keepReading) { setStatus('device unplugged', 'error'); disconnect(); }
+    });
+  } else {
+    setStatus('Web Serial not supported — use Chrome or Edge on desktop', 'error');
+    connectBtn.disabled = true;
+  }
+
+  connectBtn.addEventListener('click', connect);
+  disconnectBtn.addEventListener('click', disconnect);
+
+  startBtn.addEventListener('click', () => {
+    liveSession = newSession(pendingBaud);
+    liveSession.name = sessionNameInput.value.trim() || liveSession.name;
+    liveSession.projectLabel = projectLabelInput.value;
+    resetLiveUi(liveSession);
+    logDivider(liveLogEl, '── Recording started: ' + liveSession.name + ' ──');
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+  });
+
+  stopBtn.addEventListener('click', async () => {
+    await finalizeRecording(true);
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+  });
+
+  function exportCsv(session) {
+    if (!session || !session.samples.length) return;
+    const t0 = session.samples[0].t;
+    const header = ['elapsed_s', 'dt_s', 'raw_line', ...session.fieldOrder.map(k => session.fieldDisplayNames[k] || k)];
+    const rows = [header.map(csvEscape).join(',')];
+    for (let i = 0; i < session.samples.length; i++) {
+      const s = session.samples[i];
+      const dt = i === 0 ? '' : ((s.t - session.samples[i - 1].t) / 1000).toFixed(3);
+      const row = [((s.t - t0) / 1000).toFixed(3), dt, csvEscape(s.raw)];
+      for (const key of session.fieldOrder) {
+        const v = s.fields[key];
+        row.push(v === undefined ? '' : String(v));
+      }
+      rows.push(row.join(','));
+    }
+    downloadBlob(rows.join('\n'), 'text/csv', slug(session.name) + '.csv');
+  }
+
+  function exportJson(session) {
+    if (!session) return;
+    downloadBlob(JSON.stringify(session, null, 2), 'application/json', slug(session.name) + '.json');
+  }
+
+  document.getElementById('exportCsvBtn').addEventListener('click', () => exportCsv(liveSession));
+  document.getElementById('exportJsonBtn').addEventListener('click', () => exportJson(liveSession));
+
+  window.addEventListener('beforeunload', () => {
+    if (liveSession) { try { putSession(liveSession); } catch (_) {} }
+  });
+
+  // ---------- LIBRARY TAB wiring ----------
+
+  const libraryListView = document.getElementById('libraryListView');
+  const libraryViewerView = document.getElementById('libraryViewerView');
+  const libraryListEl = document.getElementById('libraryList');
+  const libStatusEl = document.getElementById('libStatus');
+  const importBtn = document.getElementById('importBtn');
+  const importInput = document.getElementById('importInput');
+  const libChecklistEl = document.getElementById('libChecklist');
+  const libNormalizeEl = document.getElementById('libNormalize');
+  const libViewerTitle = document.getElementById('libViewerTitle');
+  const libViewerMeta = document.getElementById('libViewerMeta');
+  const libLogEl = document.getElementById('libLog');
+
+  let openedLibSession = null;
+  let libRegistry = new Map();
+  let libChecked = new Set();
+
+  const libChartInst = registerChart(document.getElementById('libChart'), 220, (ctx, w, h) =>
+    drawChart(ctx, w, h, openedLibSession ? openedLibSession.samples : [], libRegistry, libChecked,
+      { mode: 'full', normalize: libNormalizeEl.checked }));
+
+  libNormalizeEl.addEventListener('change', () => redrawChart(libChartInst));
+
+  function showLibrarySub(view) {
+    libraryListView.hidden = view !== 'list';
+    libraryViewerView.hidden = view !== 'viewer';
+  }
+
+  function setLibStatus(text, isError) {
+    libStatusEl.textContent = text;
+    libStatusEl.className = 'status' + (isError ? ' error' : '');
+  }
+
+  async function refreshLibraryList() {
+    const metas = await getAllSessionsMeta();
+    libraryListEl.innerHTML = '';
+    if (!metas.length) {
+      libraryListEl.innerHTML = '<p class="warning">No recorded sessions yet — connect on the Live tab to start one.</p>';
+      return;
+    }
+    for (const m of metas) {
+      const row = document.createElement('div');
+      row.className = 'lib-row';
+      row.innerHTML =
+        '<div class="lib-main">' +
+          '<div class="lib-name">' + escapeHtml(m.name) + '</div>' +
+          '<div class="lib-meta">' + escapeHtml(m.projectLabel || '—') + ' · ' + m.baudRate + ' baud · ' +
+            new Date(m.createdAt).toLocaleString() + ' · ' + m.sampleCount + ' samples' +
+            (m.closedAt ? '' : ' (still open)') +
+          '</div>' +
+        '</div>' +
+        '<div class="lib-actions">' +
+          '<button data-act="open" data-id="' + m.id + '">Open</button>' +
+          '<button data-act="rename" data-id="' + m.id + '" class="secondary">Rename</button>' +
+          '<button data-act="export-csv" data-id="' + m.id + '" class="secondary">CSV</button>' +
+          '<button data-act="export-json" data-id="' + m.id + '" class="secondary">JSON</button>' +
+          '<button data-act="delete" data-id="' + m.id + '" class="secondary danger">Delete</button>' +
+        '</div>';
+      libraryListEl.appendChild(row);
+    }
+  }
+
+  async function openLibrarySession(id) {
+    const session = await getSession(id);
+    if (!session) return;
+    openedLibSession = session;
+    libRegistry = new Map();
+    session.fieldOrder.forEach(k => assignColor(libRegistry, k, session.fieldDisplayNames[k]));
+    libChecked = new Set(session.fieldOrder);
+    renderChecklist(libChecklistEl, libRegistry, session.fieldOrder, libChecked, () => redrawChart(libChartInst));
+    libViewerTitle.textContent = session.name;
+    libViewerMeta.textContent = (session.projectLabel || '—') + ' · ' + session.baudRate + ' baud · ' +
+      session.samples.length + ' samples · ' + new Date(session.createdAt).toLocaleString();
+    libLogEl.innerHTML = '';
+    session.samples.forEach(s => logLine(libLogEl, s.raw));
+    showLibrarySub('viewer');
+    redrawChart(libChartInst);
+  }
+
+  document.getElementById('libBackBtn').addEventListener('click', () => {
+    openedLibSession = null;
+    showLibrarySub('list');
+    refreshLibraryList();
+  });
+
+  libraryListEl.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const act = btn.dataset.act;
+    if (act === 'open') return openLibrarySession(id);
+    if (act === 'rename') {
+      const session = await getSession(id);
+      const name = prompt('Session name:', session.name);
+      if (name && name.trim()) {
+        session.name = name.trim();
+        session.updatedAt = Date.now();
+        await putSession(session);
+        refreshLibraryList();
+      }
+      return;
+    }
+    if (act === 'delete') {
+      if (confirm('Delete this recorded session? This cannot be undone.')) {
+        await deleteSession(id);
+        refreshLibraryList();
+      }
+      return;
+    }
+    if (act === 'export-csv') { exportCsv(await getSession(id)); return; }
+    if (act === 'export-json') { exportJson(await getSession(id)); return; }
+  });
+
+  document.getElementById('libRenameBtn').addEventListener('click', async () => {
+    if (!openedLibSession) return;
+    const name = prompt('Session name:', openedLibSession.name);
+    if (name && name.trim()) {
+      openedLibSession.name = name.trim();
+      openedLibSession.updatedAt = Date.now();
+      await putSession(openedLibSession);
+      libViewerTitle.textContent = openedLibSession.name;
+    }
+  });
+  document.getElementById('libDeleteBtn').addEventListener('click', async () => {
+    if (!openedLibSession) return;
+    if (confirm('Delete this recorded session? This cannot be undone.')) {
+      await deleteSession(openedLibSession.id);
+      openedLibSession = null;
+      showLibrarySub('list');
+      refreshLibraryList();
+    }
+  });
+  document.getElementById('libExportCsvBtn').addEventListener('click', () => exportCsv(openedLibSession));
+  document.getElementById('libExportJsonBtn').addEventListener('click', () => exportJson(openedLibSession));
+
+  importBtn.addEventListener('click', () => importInput.click());
+  importInput.addEventListener('change', async () => {
+    const file = importInput.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const obj = JSON.parse(text);
+      if (!obj || !Array.isArray(obj.samples) || !Array.isArray(obj.fieldOrder)) {
+        throw new Error('not a valid session file');
+      }
+      obj.id = crypto.randomUUID(); // always import as a new session, never overwrite in place
+      obj.updatedAt = Date.now();
+      await putSession(obj);
+      await refreshLibraryList();
+      setLibStatus('Imported "' + obj.name + '" as a new session.');
+    } catch (err) {
+      setLibStatus('Import failed: ' + err.message, true);
+    }
+    importInput.value = '';
+  });
+
+  // ---------- init ----------
+  resizeChart(liveChartInst);
+  resizeChart(fullChartInst);
+  resizeChart(libChartInst);
+})();
+</script>
+
+</body>
+</html>
